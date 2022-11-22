@@ -3,11 +3,15 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
+CELL_SIZE = 100
 
 WHITE = 1
 BLACK = 2
 EMPTY = 0
 
+RES_EAT = 2
+RES_MOVE = 1
+RES_FAIL = 0
 
 class CHEngine:
     def __init__(self):
@@ -77,6 +81,27 @@ class CHEngine:
         else:
             return False
 
+    def can_eat(self, cfrom):
+        curx = cfrom['x']
+        cury = cfrom['y']
+        color = self.board[cury][curx]
+
+        res = RES_FAIL
+
+        mult = [[2, 2], [-2, 2], [2, -2], [-2, -2]]
+        for i in mult:
+            shifty = cury + i[0]
+            shiftx = curx + i[1]
+            if (shifty < 0 or shifty > 7) or \
+                    (shiftx < 0 or shiftx > 7):
+                continue
+            else:
+                if self._checkeat(cfrom, {'x': shiftx, 'y': shifty}) and \
+                     self.check_move(cfrom, {'x': shiftx, 'y': shifty}):
+                    res = RES_EAT
+                    break
+        return res
+
     def _new_game(self, color, row):
         for i in range(row, row + 3):
             if i % 2 == 0:
@@ -86,7 +111,6 @@ class CHEngine:
                 for j in range(0, 7, 2):
                     self.board[i][j] = color
 
-
     def new_game(self):
         self._new_game(BLACK, 0)
         self._new_game(WHITE, len(self.board) - 3)
@@ -95,7 +119,6 @@ class CHEngine:
         return self.board[cfrom['y']][cfrom['x']] == EMPTY
 
     def make_move(self, cfrom, cto):
-
         if self.check_move(cfrom, cto):
             stat = self._checkeat(cfrom, cto)
             stat2 = self._checkmove(cfrom, cto)
@@ -103,13 +126,13 @@ class CHEngine:
                 self.board[cto['y']][cto['x']] = self.board[cfrom['y']][cfrom['x']]
                 self.board[cfrom['y']][cfrom['x']] = EMPTY
                 self.board[stat[0]][stat[1]] = EMPTY
-                return True
+                return RES_EAT
             elif stat2:
                 self.board[cto['y']][cto['x']] = self.board[cfrom['y']][cfrom['x']]
                 self.board[cfrom['y']][cfrom['x']] = EMPTY
-                return True
+                return RES_MOVE
 
-        return False
+        return RES_FAIL
 
 
 class View(QMainWindow):
@@ -123,8 +146,6 @@ class View(QMainWindow):
         self.first = True
         self.x = 0
         self.y = 0
-        self.x1 = 0
-        self.y1 = 0
         self.board = None
         self.isselected = False
         self.oldFigures = None
@@ -143,9 +164,10 @@ class View(QMainWindow):
         self.pixmapB = QPixmap("/home/linuxlite/Downloads/blackfigure.png")
         self.pixmapW = QPixmap("/home/linuxlite/Downloads/whitefigure.png")
 
-    def SetEngineMethod(self, f_makemove, f_empty):
+    def SetEngineMethod(self, f_makemove, f_empty, f_caneat):
         self.f_makemove = f_makemove
         self.f_empty = f_empty
+        self.f_caneat = f_caneat
 
     def paintEvent(self, e):
         if self.first: # если первый запуск то рисуем шахматную доску
@@ -154,10 +176,10 @@ class View(QMainWindow):
             for i in range(8):
                 for j in range(8):
                     if (8 - i + 1 + j) % 2 == 0:
-                        Rect = QGraphicsRectItem(i * 100, j * 100, 100, 100)
+                        Rect = QGraphicsRectItem(i * CELL_SIZE, j * CELL_SIZE, CELL_SIZE, CELL_SIZE)
                         Rect.setBrush(QColor(101, 67, 33))
                     else:
-                        Rect = QGraphicsRectItem(i * 100, j * 100, 100, 100)
+                        Rect = QGraphicsRectItem(i * CELL_SIZE, j * CELL_SIZE, CELL_SIZE, CELL_SIZE)
                         Rect.setBrush(QColor(255, 255, 255))
                     self.scene.addItem(Rect)
             for _ in range(12):
@@ -169,18 +191,17 @@ class View(QMainWindow):
             for j in range(len(self.board[i])):
                 if self.board[i][j] == BLACK:
                     pic = self.scene.addPixmap(self.pixmapB.scaled(90, 90))
-                    pic.setOffset(j * 100 + 5, i * 100 + 5)
+                    pic.setOffset(j * CELL_SIZE + 5, i * CELL_SIZE + 5)
 
                 elif self.board[i][j] == WHITE:
                     pic = self.scene.addPixmap(self.pixmapW.scaled(90, 90))
-                    pic.setOffset(j * 100 + 5, i * 100 + 5)
-
+                    pic.setOffset(j * CELL_SIZE + 5, i * CELL_SIZE + 5)
 
         if self.flag and self.y < 800 and self.x < 800 and self.selected:  # рисуем прямоугольник выделенную ячейку
             if self.oldRect != 0:
                 self.scene.removeItem(self.oldRect)
-            Rect = QGraphicsRectItem(self.x, self.y, 100, 100)
-            Rect.setPen(QPen(Qt.red, 2, ))
+            Rect = QGraphicsRectItem(self.x, self.y, CELL_SIZE, CELL_SIZE)
+            Rect.setPen(QPen(Qt.red, 2))
             self.scene.addItem(Rect)
             self.flag = False
             self.oldRect = Rect
@@ -191,31 +212,46 @@ class View(QMainWindow):
         self.repaint()
 
     def showstatus(self, text):
+        if self.statusobj:
+            self.scene.removeItem(self.statusobj)
         if text:
             self.statusobj = QGraphicsTextItem(text)
             self.statusobj.setPos(200, 810)
             self.scene.addItem(self.statusobj)
-        else:
-            self.scene.removeItem(self.statusobj)
 
     def mousePressEvent(self, event):
         self.statustext = ''
-        self.x = int((event.pos().x() - 50) / 100) * 100
-        self.y = int((event.pos().y() - 50) / 100) * 100
+        self.x = int((event.pos().x() - CELL_SIZE // 2) / CELL_SIZE) * CELL_SIZE
+        self.y = int((event.pos().y() - CELL_SIZE // 2) / CELL_SIZE) * CELL_SIZE
         self.flag = True
-        cell = {'x': self.x // 100, 'y': self.y // 100}
+        cell = {'x': self.x // CELL_SIZE, 'y': self.y // CELL_SIZE}
         if not self.selected:
+            self.statustext = ''
             if self.f_empty(cell):
+                return
+            if self.board[cell['y']][cell['x']] != self.hod:
+                self.statustext = 'Сейчас ходит другой цвет'
+                self.repaint()
                 return
             self.selected = cell
         else:
+            print(self.selected)
             moveok = self.f_makemove(self.selected, cell)
-            if not moveok:
+            if moveok == RES_FAIL:
                 self.statustext = 'Неверный ход'
+            if moveok == RES_EAT:
+                if self.f_caneat(cell):
+                    self.selected = None
+                    self.statustext = 'Можно съесть ещё раз'
+                    self.repaint()
+                    return
+
             self.selected = None
-        print(engine)
-        self.x1 = self.x
-        self.y1 = self.y
+            if self.hod == WHITE and moveok:
+                self.hod = BLACK
+            elif self.hod == BLACK and moveok:
+                self.hod = WHITE
+
         self.repaint()
 
 
@@ -229,7 +265,7 @@ if __name__ == '__main__':
     boardview.set_board(engine.board)
     boardview.show()
 
-    boardview.SetEngineMethod(engine.make_move, engine.isempty)
+    boardview.SetEngineMethod(engine.make_move, engine.isempty, engine.can_eat)
 
     sys.exit(app.exec())
 
