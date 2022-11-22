@@ -161,8 +161,8 @@ class View(QMainWindow):
         self.graphics_view.setScene(self.scene)
         self.graphics_view.setSceneRect(0, 0, 800, 800)
         self.setCentralWidget(self.graphics_view)
-        self.pixmapB = QPixmap("/home/linuxlite/Downloads/blackfigure.png")
-        self.pixmapW = QPixmap("/home/linuxlite/Downloads/whitefigure.png")
+        self.pixmapB = QPixmap("blackfigure.png")
+        self.pixmapW = QPixmap("whitefigure.png")
 
     def SetEngineMethod(self, f_makemove, f_empty, f_caneat):
         self.f_makemove = f_makemove
