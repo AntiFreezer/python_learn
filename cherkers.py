@@ -13,12 +13,12 @@ RES_EAT = 2
 RES_MOVE = 1
 RES_FAIL = 0
 
+
 class CHEngine:
     def __init__(self):
-        self.board = [[0 for i in range(8)] for g in range(8)]
+        self.board = None
 
     def __str__(self):
-        #return str([g for i in self.board for g in i])
         teststr = ''
         for i in self.board:
             for j in i:
@@ -84,7 +84,6 @@ class CHEngine:
     def can_eat(self, cfrom):
         curx = cfrom['x']
         cury = cfrom['y']
-        color = self.board[cury][curx]
 
         res = RES_FAIL
 
@@ -112,8 +111,10 @@ class CHEngine:
                     self.board[i][j] = color
 
     def new_game(self):
+        self.board = [[0 for i in range(8)] for g in range(8)]
         self._new_game(BLACK, 0)
         self._new_game(WHITE, len(self.board) - 3)
+        return self.board
 
     def isempty(self, cfrom):
         return self.board[cfrom['y']][cfrom['x']] == EMPTY
@@ -163,11 +164,22 @@ class View(QMainWindow):
         self.setCentralWidget(self.graphics_view)
         self.pixmapB = QPixmap("blackfigure.png")
         self.pixmapW = QPixmap("whitefigure.png")
+        self.button = QPushButton('New game', self)
+        self.button.move(50, 10)
+        self.button.clicked.connect(self.new_game)
 
-    def SetEngineMethod(self, f_makemove, f_empty, f_caneat):
+    def new_game(self):
+        self.board = self.f_newgame()
+        self.first = True
+        self.hod = WHITE
+        self.selected = None
+        self.repaint()
+
+    def SetEngineMethod(self, f_makemove, f_empty, f_caneat, f_newgame):
         self.f_makemove = f_makemove
         self.f_empty = f_empty
         self.f_caneat = f_caneat
+        self.f_newgame = f_newgame
 
     def paintEvent(self, e):
         if self.first: # если первый запуск то рисуем шахматную доску
@@ -184,8 +196,7 @@ class View(QMainWindow):
                     self.scene.addItem(Rect)
             for _ in range(12):
                 Rect = QGraphicsRectItem(xx, yy, 10, 10)
-                Rect.setPen(QPen(Qt.red,  2,))
-
+                Rect.setPen(QPen(Qt.red,  2))
 
         for i in range(len(self.board)):
             for j in range(len(self.board[i])):
@@ -258,15 +269,11 @@ class View(QMainWindow):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
 
-    engine = CHEngine()
-    engine.new_game()
-
     boardview = View()
-    boardview.set_board(engine.board)
+    engine = CHEngine()
+    boardview.set_board(engine.new_game())
     boardview.show()
 
-    boardview.SetEngineMethod(engine.make_move, engine.isempty, engine.can_eat)
+    boardview.SetEngineMethod(engine.make_move, engine.isempty, engine.can_eat, engine.new_game)
 
     sys.exit(app.exec())
-
-
